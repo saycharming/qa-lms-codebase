@@ -1,0 +1,60 @@
+name: ShopDesk Laravel Quality Gate
+on: [push, pull_request]
+permissions:
+  contents: read
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          extensions: mbstring, pdo_sqlite
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install and test Laravel API
+        run: |
+          composer install --no-interaction --prefer-dist
+          cp .env.example .env
+          php artisan key:generate
+          php artisan migrate --seed
+          php artisan test
+        working-directory: api
+      - name: Install frontend dependencies
+        run: npm ci || npm install
+        working-directory: web
+      - name: Install QA tooling
+        run: npm ci || npm install
+        working-directory: qa
+      - name: JS unit and component checks
+        run: npm test
+        working-directory: qa
+      - name: Build frontend
+        run: npm run build
+        working-directory: web
+      - name: Start Laravel API and await health
+        run: |
+          cd api
+          php artisan serve --host=127.0.0.1 --port=8000 >/tmp/pintop-api.log 2>&1 &
+          for i in $(seq 1 30); do curl -sf http://127.0.0.1:8000/api/health && exit 0; sleep 1; done
+          cat /tmp/pintop-api.log; exit 1
+      - name: Laravel API client integration
+        env:
+          RUN_LARAVEL_INTEGRATION: '1'
+        run: npm run test:api
+        working-directory: qa
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+        working-directory: qa
+      - name: Browser journeys
+        run: npm run test:e2e -- --project=chromium
+        working-directory: qa
+      - name: Test artefacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: qa-reports
+          path: qa/reports/
+          if-no-files-found: ignore

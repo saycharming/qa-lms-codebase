@@ -1,0 +1,11 @@
+node_modules/
+api/data/
+.env
+.env.local
+qa/reports/
+qa/test-results/
+qa/playwright-report/
+.DS_Store
+TEACHING_CODEBASE_GUIDE.md
+TEACHING_CODEBASE_GUIDE.pdf
+lesson-labs/*
